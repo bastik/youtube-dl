@@ -1,17 +1,14 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import functools
-import re
-
 from .common import InfoExtractor
 from ..utils import (
-    OnDemandPagedList,
     determine_ext,
     parse_iso8601,
     ExtractorError
 )
 from ..compat import compat_str
+
 
 class ZDFIE(InfoExtractor):
     _VALID_URL = r'https?://www\.zdf\.de/.*?/(?P<id>[^/?]*?)\.html'
@@ -35,6 +32,7 @@ class ZDFIE(InfoExtractor):
             extr_mobile = ZDFExtractorMobile(self, url, video_id)
             formats = extr_mobile._real_extract()
         return formats
+
 
 class ZDFExtractor:
     """Super class for the 2 extraction methods"""
@@ -76,6 +74,7 @@ class ZDFExtractor:
             'description': self._get_description(),
             'timestamp': self._get_timestamp()
         }
+
 
 class ZDFExtractorMobile(ZDFExtractor):
     """Simple URL extraction method. Disadvantage: fewer formats, no subtitles"""
@@ -119,6 +118,7 @@ class ZDFExtractorMobile(ZDFExtractor):
             max_res = max(teaser_images, key=int)
             return teaser_images[max_res].get('url')
 
+
 class ZDFExtractorPlayer(ZDFExtractor):
     """Extraction method that requires downloads of several pages.
 
@@ -160,7 +160,6 @@ class ZDFExtractorPlayer(ZDFExtractor):
 
         self.meta_data = self.parent._download_json(meta_data_url, self.video_id, note='Downloading meta data')
 
-        formats = []
         for p_list_entry in self.meta_data['priorityList']:
             for formitaet in p_list_entry['formitaeten']:
                 for entry in formitaet['qualities']:
@@ -222,7 +221,7 @@ class ZDFExtractorPlayer(ZDFExtractor):
                     subformat['ext'] = 'vtt'
                 elif caption.get('format') == 'ebu-tt-d-basic-de':
                     subformat['ext'] = 'ttml'
-                if not lang in subtitles:
+                if lang not in subtitles:
                     subtitles[lang] = []
                 subtitles[lang].append(subformat)
         return subtitles
@@ -249,8 +248,10 @@ class ZDFExtractorPlayer(ZDFExtractor):
                     best = max(teasers)
                     return teasers[best]
 
+
 class ZDFChannelIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?zdf\.de/(?P<group>[^/]+)/(?P<id>[^/]+)'
+
     def _real_extract(self, url):
         display_id = self._match_id(url)
         webpage = self._download_webpage(url, display_id)
@@ -264,12 +265,11 @@ class ZDFChannelIE(InfoExtractor):
         except:
             configuration_url = 'https://www.zdf.de/ZDFplayer/configs/zdf/zdf2016/configuration.json'
 
-        
         configuration_json = self._download_json(configuration_url, channel_id, note='Downloading player configuration')
         api_token = configuration_json['apiToken']
 
         content_json = self._download_json('https://api.zdf.de/content/documents/' + channel_id + '.json', channel_id, headers={'Api-Auth': 'Bearer %s' % api_token}, note='Downloading channel data')
-        
+
         channel_title = content_json.get('title')
 
         modules = content_json.get('module')
@@ -277,7 +277,7 @@ class ZDFChannelIE(InfoExtractor):
             for module in modules:
                 module_filter_ref = module.get('filterRef')
                 if module_filter_ref:
-                    if any(x in ['page-video_episode','page-video_episode_vod'] for x in module_filter_ref.get('filterDocTypes', [])):
+                    if any(x in ['page-video_episode', 'page-video_episode_vod'] for x in module_filter_ref.get('filterDocTypes', [])):
                         videos = module_filter_ref['resultsWithVideo']['http://zdf.de/rels/search/results']
                         break
                     else:
