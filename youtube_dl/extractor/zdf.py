@@ -289,7 +289,8 @@ class ZDFChannelIE(InfoExtractor):
             for module in modules:
                 module_filter_ref = module.get('filterRef')
                 if module_filter_ref:
-                    if any(x in ['page-video_episode', 'page-video_episode_vod'] for x in module_filter_ref.get('filterDocTypes', [])):
+                    doctypes = module_filter_ref.get('filterDocTypes', [])
+                    if any(x in ['page-video_episode', 'page-video_episode_vod'] for x in doctypes) and not any(x in ['page-video_clip', 'page-video_clip_vod'] for x in doctypes):
                         videos = module_filter_ref['resultsWithVideo']['http://zdf.de/rels/search/results']
                         break
                     else:
