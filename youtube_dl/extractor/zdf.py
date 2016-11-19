@@ -250,7 +250,7 @@ class ZDFExtractorPlayer(ZDFExtractor):
 
 
 class ZDFChannelIE(InfoExtractor):
-    _VALID_URL = r'https?://(?:www\.)?zdf\.de/(?P<group>[^/]+)/(?P<id>[^/]+)'
+    _VALID_URL = r'https?://(?:www\.)?zdf\.de/(?P<group>[^/]+)/(?P<id>[^/]+)(?!.*[.]html$).*$'
 
     def _real_extract(self, url):
         display_id = self._match_id(url)
