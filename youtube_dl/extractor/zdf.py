@@ -1,17 +1,14 @@
 # coding: utf-8
 from __future__ import unicode_literals
 
-import functools
-import re
-
 from .common import InfoExtractor
 from ..utils import (
-    OnDemandPagedList,
     determine_ext,
     parse_iso8601,
     ExtractorError
 )
 from ..compat import compat_str
+
 
 class ZDFIE(InfoExtractor):
     _VALID_URL = r'https?://www\.zdf\.de/.*?/(?P<id>[^/?]*?)\.html'
@@ -21,7 +18,10 @@ class ZDFIE(InfoExtractor):
         'info_dict': {
             'id': 'zdfmediathek-trailer-100',
             'ext': 'mp4',
-            'title': 'Trailer ZDFmediathek Supermarkt',
+            'title': 'Die neue ZDFmediathek',
+            'description': 'Alles zu deiner Zeit - Schön, wenn man die Auswahl hat.',
+            "timestamp": 1477627200,
+            "upload_date": "20161028",
         }
     }]
 
@@ -35,6 +35,7 @@ class ZDFIE(InfoExtractor):
             extr_mobile = ZDFExtractorMobile(self, url, video_id)
             formats = extr_mobile._real_extract()
         return formats
+
 
 class ZDFExtractor:
     """Super class for the 2 extraction methods"""
@@ -76,6 +77,7 @@ class ZDFExtractor:
             'description': self._get_description(),
             'timestamp': self._get_timestamp()
         }
+
 
 class ZDFExtractorMobile(ZDFExtractor):
     """Simple URL extraction method. Disadvantage: fewer formats, no subtitles"""
@@ -119,6 +121,7 @@ class ZDFExtractorMobile(ZDFExtractor):
             max_res = max(teaser_images, key=int)
             return teaser_images[max_res].get('url')
 
+
 class ZDFExtractorPlayer(ZDFExtractor):
     """Extraction method that requires downloads of several pages.
 
@@ -160,7 +163,6 @@ class ZDFExtractorPlayer(ZDFExtractor):
 
         self.meta_data = self.parent._download_json(meta_data_url, self.video_id, note='Downloading meta data')
 
-        formats = []
         for p_list_entry in self.meta_data['priorityList']:
             for formitaet in p_list_entry['formitaeten']:
                 for entry in formitaet['qualities']:
@@ -222,7 +224,7 @@ class ZDFExtractorPlayer(ZDFExtractor):
                     subformat['ext'] = 'vtt'
                 elif caption.get('format') == 'ebu-tt-d-basic-de':
                     subformat['ext'] = 'ttml'
-                if not lang in subtitles:
+                if lang not in subtitles:
                     subtitles[lang] = []
                 subtitles[lang].append(subformat)
         return subtitles
@@ -249,58 +251,72 @@ class ZDFExtractorPlayer(ZDFExtractor):
                     best = max(teasers)
                     return teasers[best]
 
+
 class ZDFChannelIE(InfoExtractor):
-    _WORKING = False
-    _VALID_URL = r'(?:zdf:topic:|https?://www\.zdf\.de/ZDFmediathek(?:#)?/.*kanaluebersicht/(?:[^/]+/)?)(?P<id>[0-9]+)'
+    _VALID_URL = r'https?://(?:www\.)?zdf\.de/(?P<group>[^/]+)/(?P<id>[^/]+)(?!.*[.]html$).*$'
+
     _TESTS = [{
-        'url': 'http://www.zdf.de/ZDFmediathek#/kanaluebersicht/1586442/sendung/Titanic',
+        'url': 'https://www.zdf.de/comedy/heute-show',
         'info_dict': {
-            'id': '1586442',
+            'title': 'heute-show',
+            'id': 'heute-show-104',
         },
-        'playlist_count': 3,
-    }, {
-        'url': 'http://www.zdf.de/ZDFmediathek/kanaluebersicht/aktuellste/332',
-        'only_matching': True,
-    }, {
-        'url': 'http://www.zdf.de/ZDFmediathek/kanaluebersicht/meist-gesehen/332',
-        'only_matching': True,
-    }, {
-        'url': 'http://www.zdf.de/ZDFmediathek/kanaluebersicht/_/1798716?bc=nrt;nrm?flash=off',
-        'only_matching': True,
+        'playlist_mincount': 5,
     }]
-    _PAGE_SIZE = 50
-
-    def _fetch_page(self, channel_id, page):
-        offset = page * self._PAGE_SIZE
-        xml_url = (
-            'http://www.zdf.de/ZDFmediathek/xmlservice/web/aktuellste?ak=web&offset=%d&maxLength=%d&id=%s'
-            % (offset, self._PAGE_SIZE, channel_id))
-        doc = self._download_xml(
-            xml_url, channel_id,
-            note='Downloading channel info',
-            errnote='Failed to download channel info')
-
-        title = doc.find('.//information/title').text
-        description = doc.find('.//information/detail').text
-        for asset in doc.findall('.//teasers/teaser'):
-            a_type = asset.find('./type').text
-            a_id = asset.find('./details/assetId').text
-            if a_type not in ('video', 'topic'):
-                continue
-            yield {
-                '_type': 'url',
-                'playlist_title': title,
-                'playlist_description': description,
-                'url': 'zdf:%s:%s' % (a_type, a_id),
-            }
 
     def _real_extract(self, url):
-        channel_id = self._match_id(url)
-        entries = OnDemandPagedList(
-            functools.partial(self._fetch_page, channel_id), self._PAGE_SIZE)
+        display_id = self._match_id(url)
+        webpage = self._download_webpage(url, display_id)
+
+        channel_id = self._search_regex(r"docId: '([^']*)'", webpage, 'channel id')
+
+        try:
+            jsb = self._search_regex(r"data-zdfplayer-jsb='([^']*)'", webpage, 'zdfplayer jsb data')
+            jsb_json = self._parse_json(jsb, channel_id)
+            configuration_url = 'https://www.zdf.de' + jsb_json['config']
+        except:
+            configuration_url = 'https://www.zdf.de/ZDFplayer/configs/zdf/zdf2016/configuration.json'
+
+        configuration_json = self._download_json(configuration_url, channel_id, note='Downloading player configuration')
+        api_token = configuration_json['apiToken']
+
+        content_json = self._download_json('https://api.zdf.de/content/documents/' + channel_id + '.json', channel_id, headers={'Api-Auth': 'Bearer %s' % api_token}, note='Downloading channel data')
+
+        channel_title = content_json.get('title')
+
+        modules = content_json.get('module')
+        if modules:
+            for module in modules:
+                module_filter_ref = module.get('filterRef')
+                if module_filter_ref:
+                    doctypes = module_filter_ref.get('filterDocTypes', [])
+                    if any(x in ['page-video_episode', 'page-video_episode_vod'] for x in doctypes) and not any(x in ['page-video_clip', 'page-video_clip_vod'] for x in doctypes):
+                        videos = module_filter_ref['resultsWithVideo']['http://zdf.de/rels/search/results']
+                        break
+                    else:
+                        videos = None
+
+        if not (modules and module_filter_ref and videos):
+            raise ExtractorError("No playlist with full episodes found", video_id=channel_id, expected=True)
+
+        entries = []
+        for video in videos:
+            video_data = video.get('http://zdf.de/rels/target')
+            if video_data:
+                video_dict = {
+                    '_type': 'url',
+                    'id': video_data.get('id'),
+                    'title': video_data.get('teaserHeadline'),
+                    'description': video_data.get('teasertext'),
+                    'url': video_data.get('http://zdf.de/rels/sharing-url'),
+                    'timestamp': parse_iso8601(video_data.get('editorialDate')),
+                    'ie_key': 'ZDF'
+                }
+                entries.append(video_dict)
 
         return {
             '_type': 'playlist',
             'id': channel_id,
-            'entries': entries,
+            'title': channel_title,
+            'entries': entries
         }
