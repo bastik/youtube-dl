@@ -18,7 +18,10 @@ class ZDFIE(InfoExtractor):
         'info_dict': {
             'id': 'zdfmediathek-trailer-100',
             'ext': 'mp4',
-            'title': 'Trailer ZDFmediathek Supermarkt',
+            'title': 'Die neue ZDFmediathek',
+            'description': 'Alles zu deiner Zeit - Schön, wenn man die Auswahl hat.',
+            "timestamp": 1477627200,
+            "upload_date": "20161028",
         }
     }]
 
@@ -251,6 +254,15 @@ class ZDFExtractorPlayer(ZDFExtractor):
 
 class ZDFChannelIE(InfoExtractor):
     _VALID_URL = r'https?://(?:www\.)?zdf\.de/(?P<group>[^/]+)/(?P<id>[^/]+)(?!.*[.]html$).*$'
+
+    _TESTS = [{
+        'url': 'https://www.zdf.de/comedy/heute-show',
+        'info_dict': {
+            'title': 'heute-show',
+            'id': 'heute-show-104',
+        },
+        'playlist_mincount': 5,
+    }]
 
     def _real_extract(self, url):
         display_id = self._match_id(url)
